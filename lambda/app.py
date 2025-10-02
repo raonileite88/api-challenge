@@ -15,8 +15,10 @@ def lambda_handler(event, context):
     print(json.dumps(event, indent=2))
 
     # --- Extract HTTP method and path ---
-    method = event.get('requestContext', {}).get('http', {}).get('method')
-    path = event.get('rawPath') or event.get('requestContext', {}).get('http', {}).get('path', '')
+    method = event.get('requestContext', {}).get('http', {}).get('method', '')
+    path = event.get('rawPath', '')
+
+    print(f"DEBUG: method={method}, path={path}")
 
     # --- Define full paths including stage ---
     routes = {

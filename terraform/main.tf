@@ -133,8 +133,11 @@ resource "aws_apigatewayv2_route" "create_vpc" {
   route_key = "POST /create-vpc"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+  #authorization_type = "JWT"
+  #authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+
+  authorization_type = "NONE"
+  authorizer_id      = null
 }
 
 resource "aws_apigatewayv2_route" "get_vpcs" {
@@ -142,8 +145,11 @@ resource "aws_apigatewayv2_route" "get_vpcs" {
   route_key = "GET /vpcs"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+  #authorization_type = "JWT"
+  #authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+
+  authorization_type = "NONE"
+  authorizer_id      = null
 }
 
 # --- Lambda Permission for API Gateway ---
