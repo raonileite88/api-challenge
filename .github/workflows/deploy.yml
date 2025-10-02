@@ -1,14 +1,15 @@
 name: Deploy Lambda + Terraform
 
 on:
-#  push:
-#    branches:
-#      - main
- workflow_dispatch:
+  workflow_dispatch:   # Permite execução manual
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
 
     steps:
       #  Checkout repo
@@ -20,6 +21,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
+      #  List repo contents (debug)
+      - name: List repository files
+        run: ls -R
 
       #  Install Lambda dependencies
       - name: Install Python dependencies
@@ -48,8 +53,4 @@ jobs:
       #  Terraform Apply
       - name: Terraform Apply
         working-directory: terraform
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: terraform apply -auto-approve
