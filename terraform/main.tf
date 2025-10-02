@@ -94,7 +94,6 @@ resource "aws_apigatewayv2_deployment" "vpc_api_deployment" {
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.vpc_api.id
   name        = "prod"
-  deployment_id = aws_apigatewayv2_deployment.vpc_api_deployment.id
   auto_deploy = true
 }
 
