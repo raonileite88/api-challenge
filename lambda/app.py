@@ -14,9 +14,12 @@ def lambda_handler(event, context):
     print("Incoming event:")
     print(json.dumps(event, indent=2))
 
-    # --- Extract HTTP method and path ---
-    method = event.get('requestContext', {}).get('http', {}).get('method')
-    path = event.get('rawPath')
+    # --- Safely extract HTTP method ---
+    method = event.get('requestContext', {}).get('http', {}).get('method', '')
+
+    # --- Safely extract path ---
+    path = event.get('rawPath') or event.get('requestContext', {}).get('http', {}).get('path', '')
+    path = path or ''  # ensure path is string
 
     # --- Remove stage prefix if present ---
     stage = event.get('requestContext', {}).get('stage', '')
