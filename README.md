@@ -1,148 +1,95 @@
-# AWS Lambda VPC Management API
+# VPC Management API
 
-## Project Overview
+This project provides a serverless HTTP API to **create and list VPCs and subnets** in AWS using **Lambda**, **API Gateway**, and **Cognito JWT authentication**. The API is protected by a Cognito User Pool, and all requests require a valid JWT token.
 
-This project provides a serverless API using **AWS Lambda** and **API Gateway** to **create and list VPCs** in your AWS account.
-It is designed to be lightweight and scalable, using **Python 3.11** as the runtime for the Lambda function.
-The project also integrates **AWS Cognito** for authentication using JWT tokens.
+---
 
-The API exposes two main endpoints:
+## Table of Contents
 
-1. `GET /vpcs` - List all VPCs in the AWS account.
-2. `POST /create-vpc` - Create a new VPC with one or more subnets.
+* [Architecture](#architecture)
+* [API Endpoints](#api-endpoints)
+* [Authentication](#authentication)
+* [Creating a Cognito User](#creating-a-cognito-user)
+* [Getting a JWT Token](#getting-a-jwt-token)
+* [Usage](#usage)
 
 ---
 
 ## Architecture
 
-* **AWS Lambda:** Contains the Python code that handles the API requests and interacts with AWS VPC service.
-* **API Gateway:** Exposes HTTP endpoints that trigger the Lambda function.
-* **AWS Cognito:** Handles authentication and issues JWT tokens for API access.
-* **CloudWatch Logs:** Stores logs from the Lambda function (for debugging purposes).
+* **Lambda function** handles all API requests:
 
----
-
-## Prerequisites
-
-Before using the API, ensure the following:
-
-* An AWS account with **VPC permissions** (`ec2:DescribeVpcs`, `ec2:CreateVpc`, `ec2:CreateSubnet`, etc.).
-* **AWS CLI** installed and configured with your credentials.
-* Python 3.11 runtime for Lambda.
-
----
-
-## AWS Cognito JWT Authentication
-
-The API requires a **JWT token** from Cognito to authorize requests.
-
-You can get a JWT token using the AWS CLI:
-
-```bash
-aws cognito-idp admin-initiate-auth \
-  --region <your-region> \
-  --user-pool-id <your-user-pool-id> \
-  --client-id <your-app-client-id> \
-  --auth-flow ADMIN_NO_SRP_AUTH \
-  --auth-parameters "USERNAME=<username>,PASSWORD=<password>"
-```
-
-Replace:
-
-* `<your-region>` with your AWS region (e.g., `us-east-1`)
-* `<your-user-pool-id>` with your Cognito User Pool ID
-* `<your-app-client-id>` with your App Client ID
-* `<username>` and `<password>` with your Cognito user credentials
-
-The output will include an **IdToken** which you can use in the `Authorization` header for API requests:
-
-```
-Authorization: <JWT_TOKEN>
-```
+  * `GET /vpcs` → Lists all VPCs.
+  * `POST /create-vpc` → Creates a new VPC with subnets.
+* **API Gateway (HTTP API)** routes requests to the Lambda.
+* **Cognito User Pool** handles user authentication.
+* **JWT Authorizer** ensures only authorized users can access the API.
 
 ---
 
 ## API Endpoints
 
-### 1. GET /vpcs
+### GET /vpcs
 
-Retrieve a list of all VPCs in your AWS account.
+**Description:** Returns all VPCs in the account.
 
-**Request:**
-
-```bash
-curl -X GET "https://<api-gateway-url>/prod/vpcs" \
-  -H "Authorization: <JWT_TOKEN>"
-```
-
-**Response:**
+**Response Example:**
 
 ```json
 [
   {
-    "vpc_id": "vpc-0123456789abcdef0",
-    "cidr_block": "10.0.0.0/16",
-    "is_default": false,
-    "subnets": [
-      {
-        "subnet_id": "subnet-11111111",
-        "name": "SubnetA",
-        "cidr_block": "10.0.1.0/24",
-        "availability_zone": "us-east-1a"
-      }
-    ]
+    "VpcId": "vpc-12345678",
+    "Name": "MyVPC",
+    "CidrBlock": "10.0.0.0/16",
+    "State": "available",
+    "IsDefault": false
   }
 ]
 ```
 
----
+### POST /create-vpc
 
-### 2. POST /create-vpc
+**Description:** Creates a new VPC and its subnets.
 
-Create a new VPC with optional subnets.
-
-**Request:**
-
-```bash
-curl -X POST "https://<api-gateway-url>/prod/create-vpc" \
-  -H "Authorization: <JWT_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "vpc_name": "MyVPC",
-        "cidr_block": "10.0.0.0/16",
-        "subnets": [
-          {
-            "name": "SubnetA",
-            "cidr_block": "10.0.1.0/24",
-            "az": "us-east-1a"
-          },
-          {
-            "name": "SubnetB",
-            "cidr_block": "10.0.2.0/24",
-            "az": "us-east-1b"
-          }
-        ]
-      }'
-```
-
-**Response:**
+**Request Body Example:**
 
 ```json
 {
-  "vpc_id": "vpc-0123456789abcdef0",
+  "vpc_name": "MyVPC",
   "cidr_block": "10.0.0.0/16",
   "subnets": [
     {
-      "subnet_id": "subnet-11111111",
       "name": "SubnetA",
       "cidr_block": "10.0.1.0/24",
-      "availability_zone": "us-east-1a"
+      "az": "us-east-1a"
     },
     {
-      "subnet_id": "subnet-22222222",
       "name": "SubnetB",
       "cidr_block": "10.0.2.0/24",
-      "availability_zone": "us-east-1b"
+      "az": "us-east-1b"
+    }
+  ]
+}
+```
+
+**Response Example:**
+
+```json
+{
+  "message": "VPC and Subnets created",
+  "VpcId": "vpc-12345678",
+  "Name": "MyVPC",
+  "CidrBlock": "10.0.0.0/16",
+  "Subnets": [
+    {
+      "SubnetId": "subnet-11111111",
+      "CidrBlock": "10.0.1.0/24",
+      "AvailabilityZone": "us-east-1a"
+    },
+    {
+      "SubnetId": "subnet-22222222",
+      "CidrBlock": "10.0.2.0/24",
+      "AvailabilityZone": "us-east-1b"
     }
   ]
 }
@@ -150,23 +97,64 @@ curl -X POST "https://<api-gateway-url>/prod/create-vpc" \
 
 ---
 
-## Notes
+## Authentication
 
-* Ensure that your **JWT token** is valid and included in the `Authorization` header for all API requests.
-* CloudWatch logs are available for debugging, but you may disable or remove debug logs in production to avoid excessive logging.
-* The Lambda function is designed to handle **JSON input/output**.
+All requests require a **JWT token** obtained from AWS Cognito. The API Gateway JWT authorizer validates this token automatically.
 
 ---
 
-## Example Workflow
+## Creating a Cognito User
 
-1. Obtain JWT token from Cognito.
-2. Call `GET /vpcs` to see existing VPCs.
-3. Call `POST /create-vpc` to create a new VPC.
-4. Verify the creation by calling `GET /vpcs` again.
+You can create a user manually using the **AWS CLI**. Replace `YOUR_USER_POOL_ID` and `USERNAME` with your values. The temporary password will need to be changed at first login.
+
+```bash
+aws cognito-idp admin-create-user \
+  --user-pool-id YOUR_USER_POOL_ID \
+  --username testuser \
+  --temporary-password "TempPassword123!" \
+  --message-action "SUPPRESS"
+```
+
+* `--message-action "SUPPRESS"` prevents sending a welcome email.
+* After creation, the user must **set a permanent password** via the AWS Console or CLI (`admin-set-user-password`).
 
 ---
 
-## License
+## Getting a JWT Token
 
-This project is provided as-is for educational and internal use. No warranty is provided.
+Once the user exists, you can get a JWT token using:
+
+```bash
+aws cognito-idp admin-initiate-auth \
+  --region us-east-1 \
+  --user-pool-id YOUR_USER_POOL_ID \
+  --client-id YOUR_USER_POOL_CLIENT_ID \
+  --auth-flow ADMIN_NO_SRP_AUTH \
+  --auth-parameters "USERNAME=testuser,PASSWORD=YourPassword123!"
+```
+
+This will return a JSON containing `IdToken`, `AccessToken`, and `RefreshToken`. Use the `IdToken` in the `Authorization` header for API requests:
+
+```
+Authorization: Bearer <ID_TOKEN>
+```
+
+---
+
+## Usage
+
+1. Deploy the API using Terraform.
+2. Create a Cognito user using AWS CLI.
+3. Get a JWT token.
+4. Use the token to call the API via tools like **Insomnia**, **Postman**, or `curl`.
+
+Example with `curl`:
+
+```bash
+curl -H "Authorization: Bearer <ID_TOKEN>" https://your-api.execute-api.us-east-1.amazonaws.com/prod/vpcs
+```
+
+---
+
+**Security Note:**
+Do **not** hardcode users or passwords in Terraform. Always create users securely via CLI, Console, or an external system.
