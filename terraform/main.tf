@@ -48,11 +48,12 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 
 # --- Lambda Function ---
 resource "aws_lambda_function" "vpc_api" {
-  function_name = var.lambda_name
-  runtime       = "python3.11"
-  handler       = "app.lambda_handler"
-  role          = aws_iam_role.lambda_exec.arn
-  filename      = "lambda.zip"
+  function_name    = var.lambda_name
+  runtime          = "python3.11"
+  handler          = "app.lambda_handler"
+  role             = aws_iam_role.lambda_exec.arn
+  filename         = "${path.module}/lambda.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda.zip")
 
   environment {
     variables = {

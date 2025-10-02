@@ -38,6 +38,7 @@ jobs:
         run: |
           cd lambda
           zip -r ../terraform/lambda.zip .
+          cd ..
 
       #  Setup Terraform
       - name: Setup Terraform
