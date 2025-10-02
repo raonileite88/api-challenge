@@ -6,15 +6,23 @@ ec2 = boto3.client("ec2")
 def lambda_handler(event, context):
     print("DEBUG EVENT:", json.dumps(event, indent=2))
 
-    # Extrair método e path do API Gateway v2 (HTTP API)
-    method = event.get("requestContext", {}).get("http", {}).get("method", "")
-    path = event.get("rawPath", "")
+    # Detectar versão do payload
+    version = event.get("version")
+
+    if version == "2.0":
+        # HTTP API (payload v2.0)
+        method = event.get("requestContext", {}).get("http", {}).get("method", "")
+        path = event.get("rawPath", "")
+    else:
+        # REST API (payload v1.0)
+        method = event.get("httpMethod", "")
+        path = event.get("path", "")
 
     print(f"DEBUG: method={method}, path={path}")
 
     try:
-        if method == "GET" and path == "/prod/vpcs":
-            # Listar VPCs
+        # GET /vpcs → Listar VPCs
+        if method == "GET" and path.endswith("/vpcs"):
             vpcs = ec2.describe_vpcs()
             vpc_list = []
             for vpc in vpcs.get("Vpcs", []):
@@ -30,27 +38,58 @@ def lambda_handler(event, context):
                 "body": json.dumps(vpc_list)
             }
 
-        elif method == "POST" and path == "/prod/create-vpc":
-            # Criar VPC
+        # POST /create-vpc → Criar VPC + Subnets
+        elif method == "POST" and path.endswith("/create-vpc"):
             body = {}
             if event.get("body"):
                 body = json.loads(event["body"])
 
-            cidr_block = body.get("CidrBlock", "10.0.0.0/16")  # Default se não enviar nada
-            vpc = ec2.create_vpc(CidrBlock=cidr_block)
+            cidr_block = body.get("cidr_block", "10.0.0.0/16")
+            name = body.get("vpc_name", "MyVPC")
+            subnets_data = body.get("subnets", [])
 
-            # Adiciona tag Name
+            # Criar VPC
+            vpc = ec2.create_vpc(CidrBlock=cidr_block)
+            vpc_id = vpc["Vpc"]["VpcId"]
+
+            # Criar tag na VPC
             ec2.create_tags(
-                Resources=[vpc["Vpc"]["VpcId"]],
-                Tags=[{"Key": "Name", "Value": body.get("Name", "MyVPC")}]
+                Resources=[vpc_id],
+                Tags=[{"Key": "Name", "Value": name}]
             )
+
+            created_subnets = []
+            for i, subnet_def in enumerate(subnets_data, start=1):
+                cidr = subnet_def.get("cidr_block")
+                az = subnet_def.get("availability_zone")
+
+                subnet = ec2.create_subnet(
+                    VpcId=vpc_id,
+                    CidrBlock=cidr,
+                    AvailabilityZone=az
+                )
+
+                subnet_id = subnet["Subnet"]["SubnetId"]
+
+                # Tag na Subnet
+                ec2.create_tags(
+                    Resources=[subnet_id],
+                    Tags=[{"Key": "Name", "Value": f"{name}-subnet-{i}"}]
+                )
+
+                created_subnets.append({
+                    "SubnetId": subnet_id,
+                    "CidrBlock": cidr,
+                    "AvailabilityZone": az
+                })
 
             return {
                 "statusCode": 201,
                 "body": json.dumps({
-                    "message": "VPC created",
-                    "VpcId": vpc["Vpc"]["VpcId"],
-                    "CidrBlock": vpc["Vpc"]["CidrBlock"]
+                    "message": "VPC and Subnets created",
+                    "VpcId": vpc_id,
+                    "CidrBlock": cidr_block,
+                    "Subnets": created_subnets
                 })
             }
 
