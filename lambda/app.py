@@ -14,20 +14,30 @@ def lambda_handler(event, context):
     print("Incoming event:")
     print(json.dumps(event, indent=2))
 
-    # --- Safely extract HTTP method ---
-    method = event.get('requestContext', {}).get('http', {}).get('method', '')
-
-    # --- Safely extract path ---
+    # --- Extract HTTP method and path ---
+    method = event.get('requestContext', {}).get('http', {}).get('method')
     path = event.get('rawPath') or event.get('requestContext', {}).get('http', {}).get('path', '')
-    path = path or ''  # ensure path is string
 
-    # --- Remove stage prefix if present ---
-    stage = event.get('requestContext', {}).get('stage', '')
-    if stage and path.startswith(f'/{stage}'):
-        path = path[len(stage)+1:]  # remove "/prod" prefix
+    # --- Define full paths including stage ---
+    routes = {
+        "GET": ["/prod/vpcs"],
+        "POST": ["/prod/create-vpc"]
+    }
 
-    # --- Handle POST /create-vpc ---
-    if method == "POST" and path == "prod/create-vpc":
+    # --- Handle GET /prod/vpcs ---
+    if method == "GET" and path == "/prod/vpcs":
+        try:
+            response = table.scan()
+            return {
+                'statusCode': 200,
+                'body': json.dumps(response.get('Items', []))
+            }
+        except Exception as e:
+            print(f"Error in GET {path}: {e}")
+            return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+
+    # --- Handle POST /prod/create-vpc ---
+    elif method == "POST" and path == "/prod/create-vpc":
         try:
             body = json.loads(event.get('body', '{}'))
             vpc_name = body.get('vpc_name')
@@ -73,19 +83,7 @@ def lambda_handler(event, context):
             }
 
         except Exception as e:
-            print(f"Error in POST /create-vpc: {e}")
-            return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-
-    # --- Handle GET /vpcs ---
-    elif method == "GET" and path == "prod/vpcs":
-        try:
-            response = table.scan()
-            return {
-                'statusCode': 200,
-                'body': json.dumps(response.get('Items', []))
-            }
-        except Exception as e:
-            print(f"Error in GET /vpcs: {e}")
+            print(f"Error in POST {path}: {e}")
             return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     # --- Invalid route ---
