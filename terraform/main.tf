@@ -1,8 +1,19 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "5.14.0"
+    }
+  }
+}
+
 provider "aws" {
   region = var.region
 }
 
-# --- IAM Role for Lambda ---
+# ---------------------------
+# IAM Role for Lambda
+# ---------------------------
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -18,18 +29,21 @@ resource "aws_iam_role" "lambda_exec" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
-# Attach policies
+# Attach EC2 Full Access
 resource "aws_iam_role_policy_attachment" "lambda_ec2" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
 }
 
+# Attach Lambda basic execution
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# --- Lambda Function ---
+# ---------------------------
+# Lambda Function
+# ---------------------------
 resource "aws_lambda_function" "vpc_api" {
   function_name    = var.lambda_name
   runtime          = "python3.11"
@@ -37,34 +51,40 @@ resource "aws_lambda_function" "vpc_api" {
   role             = aws_iam_role.lambda_exec.arn
   filename         = "${path.module}/lambda.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda.zip")
-
-  depends_on = [
-    aws_iam_role_policy_attachment.lambda_ec2,
-    aws_iam_role_policy_attachment.lambda_basic
-  ]
 }
 
-# --- API Gateway HTTP v2 ---
+# Lambda permission for API Gateway
+resource "aws_lambda_permission" "apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.vpc_api.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.vpc_api.execution_arn}/*/*"
+}
+
+# ---------------------------
+# API Gateway HTTP v2
+# ---------------------------
 resource "aws_apigatewayv2_api" "vpc_api" {
   name          = "vpc-api"
   protocol_type = "HTTP"
 }
 
-# --- Lambda Integration ---
 resource "aws_apigatewayv2_integration" "lambda_integration" {
   api_id           = aws_apigatewayv2_api.vpc_api.id
   integration_type = "AWS_PROXY"
   integration_uri  = aws_lambda_function.vpc_api.invoke_arn
 }
 
-# --- Stage ---
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.vpc_api.id
   name        = "prod"
   auto_deploy = true
 }
 
-# --- Cognito User Pool and Client ---
+# ---------------------------
+# Cognito User Pool + Client
+# ---------------------------
 resource "aws_cognito_user_pool" "users" {
   name = "vpc-api-users"
 }
@@ -81,7 +101,6 @@ resource "aws_cognito_user_pool_client" "client" {
   ]
 }
 
-# --- Test User ---
 resource "aws_cognito_user" "demo_user" {
   user_pool_id         = aws_cognito_user_pool.users.id
   username             = "testuser"
@@ -89,7 +108,9 @@ resource "aws_cognito_user" "demo_user" {
   force_alias_creation = true
 }
 
-# --- Cognito Authorizer ---
+# ---------------------------
+# Cognito JWT Authorizer
+# ---------------------------
 resource "aws_apigatewayv2_authorizer" "cognito_auth" {
   api_id           = aws_apigatewayv2_api.vpc_api.id
   name             = "CognitoAuthorizer"
@@ -102,7 +123,9 @@ resource "aws_apigatewayv2_authorizer" "cognito_auth" {
   }
 }
 
-# --- Routes ---
+# ---------------------------
+# API Routes
+# ---------------------------
 resource "aws_apigatewayv2_route" "create_vpc" {
   api_id    = aws_apigatewayv2_api.vpc_api.id
   route_key = "POST /create-vpc"
@@ -119,13 +142,4 @@ resource "aws_apigatewayv2_route" "get_vpcs" {
 
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-}
-
-# --- Lambda Permission for API Gateway ---
-resource "aws_lambda_permission" "apigw" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.vpc_api.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.vpc_api.execution_arn}/*/*"
 }
