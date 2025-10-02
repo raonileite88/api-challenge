@@ -2,7 +2,7 @@ provider "aws" {
   region = var.region
 }
 
-# DynamoDB Table
+# --- DynamoDB Table ---
 resource "aws_dynamodb_table" "vpc_table" {
   name         = var.dynamodb_table_name
   billing_mode = "PAY_PER_REQUEST"
@@ -14,7 +14,7 @@ resource "aws_dynamodb_table" "vpc_table" {
   }
 }
 
-# IAM Role for Lambda
+# --- IAM Role for Lambda ---
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -46,7 +46,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Lambda Function
+# --- Lambda Function ---
 resource "aws_lambda_function" "vpc_api" {
   function_name = var.lambda_name
   runtime       = "python3.11"
@@ -67,7 +67,7 @@ resource "aws_lambda_function" "vpc_api" {
   ]
 }
 
-# API Gateway (HTTP)
+# --- API Gateway ---
 resource "aws_apigatewayv2_api" "vpc_api" {
   name          = "vpc-api"
   protocol_type = "HTTP"
@@ -79,32 +79,57 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
   integration_uri  = aws_lambda_function.vpc_api.invoke_arn
 }
 
-resource "aws_apigatewayv2_route" "create_vpc" {
-  api_id    = aws_apigatewayv2_api.vpc_api.id
-  route_key = "POST /create-vpc"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
-}
-
-resource "aws_apigatewayv2_route" "get_vpcs" {
-  api_id    = aws_apigatewayv2_api.vpc_api.id
-  route_key = "GET /vpcs"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
-}
-
-resource "aws_lambda_permission" "apigw" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.vpc_api.function_name
-  principal     = "apigateway.amazonaws.com"
-}
-
-# Cognito User Pool (Authentication)
+# --- Cognito User Pool and Client ---
 resource "aws_cognito_user_pool" "users" {
   name = "vpc-api-users"
 }
 
 resource "aws_cognito_user_pool_client" "client" {
-  name           = "vpc-api-client"
-  user_pool_id   = aws_cognito_user_pool.users.id
-  generate_secret = false
+  name             = "vpc-api-client"
+  user_pool_id     = aws_cognito_user_pool.users.id
+  generate_secret  = false
+}
+
+# --- Test User ---
+resource "aws_cognito_user" "demo_user" {
+  user_pool_id         = aws_cognito_user_pool.users.id
+  username             = "testuser"
+  temporary_password   = "TempPassword123!"
+  force_alias_creation = true
+}
+
+# --- Cognito Authorizer ---
+resource "aws_apigatewayv2_authorizer" "cognito_auth" {
+  api_id           = aws_apigatewayv2_api.vpc_api.id
+  name             = "CognitoAuthorizer"
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+
+  jwt_configuration {
+    audience = [aws_cognito_user_pool_client.client.id]
+    issuer   = aws_cognito_user_pool.users.endpoint
+  }
+}
+
+# --- Routes with Authorizer ---
+resource "aws_apigatewayv2_route" "create_vpc" {
+  api_id        = aws_apigatewayv2_api.vpc_api.id
+  route_key     = "POST /create-vpc"
+  target        = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+  authorizer_id = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+resource "aws_apigatewayv2_route" "get_vpcs" {
+  api_id        = aws_apigatewayv2_api.vpc_api.id
+  route_key     = "GET /vpcs"
+  target        = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+  authorizer_id = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+# --- Lambda Permission ---
+resource "aws_lambda_permission" "apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.vpc_api.function_name
+  principal     = "apigateway.amazonaws.com"
 }
