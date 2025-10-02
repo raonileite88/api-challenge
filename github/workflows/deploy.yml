@@ -1,0 +1,55 @@
+name: Deploy Lambda + Terraform
+
+on:
+#  push:
+#    branches:
+#      - main
+workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      #  Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      #  Setup Python
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      #  Install Lambda dependencies
+      - name: Install Python dependencies
+        run: |
+          cd lambda
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -t .
+
+      #  Package Lambda
+      - name: Package Lambda
+        run: |
+          cd lambda
+          zip -r ../terraform/lambda.zip .
+
+      #  Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      #  Terraform Init
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      #  Terraform Apply
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: terraform apply -auto-approve
