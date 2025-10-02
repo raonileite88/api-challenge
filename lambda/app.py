@@ -3,27 +3,30 @@ import boto3
 import os
 from datetime import datetime
 
-# AWS clients
+# --- AWS clients ---
 ec2 = boto3.client('ec2')
 dynamodb = boto3.resource('dynamodb')
 table_name = os.environ.get('TABLE_NAME')
 table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
-    # Extract path and method
-    raw_path = event.get('rawPath', '')  # /vpcs or /create-vpc
-    method = event.get('requestContext', {}).get('http', {}).get('method')
+    # --- DEBUG: log the incoming event ---
+    print("Incoming event:")
+    print(json.dumps(event, indent=2))
 
-    # Remove stage prefix if present (e.g., /prod/vpcs -> /vpcs)
+    # --- Extract HTTP method and path ---
+    method = event.get('requestContext', {}).get('http', {}).get('method')
+    path = event.get('rawPath') or event.get('requestContext', {}).get('http', {}).get('path', '')
+
+    # --- Remove stage prefix if present ---
     stage = event.get('requestContext', {}).get('stage', '')
-    path = raw_path
     if stage and path.startswith(f'/{stage}'):
         path = path[len(stage)+1:]  # remove "/prod" prefix
 
     # --- Handle POST /create-vpc ---
-    if method == 'POST' and path == '/create-vpc':
+    if method == "POST" and path == "/create-vpc":
         try:
-            body = json.loads(event['body'])
+            body = json.loads(event.get('body', '{}'))
             vpc_name = body.get('vpc_name')
             cidr_block = body.get('cidr_block')
             subnets = body.get('subnets', [])
@@ -67,19 +70,22 @@ def lambda_handler(event, context):
             }
 
         except Exception as e:
+            print(f"Error in POST /create-vpc: {e}")
             return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     # --- Handle GET /vpcs ---
-    elif method == 'GET' and path == '/vpcs':
+    elif method == "GET" and path == "/vpcs":
         try:
             response = table.scan()
             return {
                 'statusCode': 200,
-                'body': json.dumps(response['Items'])
+                'body': json.dumps(response.get('Items', []))
             }
         except Exception as e:
+            print(f"Error in GET /vpcs: {e}")
             return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     # --- Invalid route ---
     else:
+        print(f"Route not found: method={method}, path={path}")
         return {'statusCode': 404, 'body': json.dumps({'error': 'Route not found', 'debug_path': path})}
