@@ -67,16 +67,24 @@ resource "aws_lambda_function" "vpc_api" {
   ]
 }
 
-# --- API Gateway ---
+# --- API Gateway HTTP v2 ---
 resource "aws_apigatewayv2_api" "vpc_api" {
   name          = "vpc-api"
   protocol_type = "HTTP"
 }
 
+# --- Lambda Integration ---
 resource "aws_apigatewayv2_integration" "lambda_integration" {
   api_id           = aws_apigatewayv2_api.vpc_api.id
   integration_type = "AWS_PROXY"
   integration_uri  = aws_lambda_function.vpc_api.invoke_arn
+}
+
+# --- Stage ---
+resource "aws_apigatewayv2_stage" "prod" {
+  api_id      = aws_apigatewayv2_api.vpc_api.id
+  name        = "prod"
+  auto_deploy = true
 }
 
 # --- Cognito User Pool and Client ---
@@ -85,9 +93,9 @@ resource "aws_cognito_user_pool" "users" {
 }
 
 resource "aws_cognito_user_pool_client" "client" {
-  name             = "vpc-api-client"
-  user_pool_id     = aws_cognito_user_pool.users.id
-  generate_secret  = false
+  name            = "vpc-api-client"
+  user_pool_id    = aws_cognito_user_pool.users.id
+  generate_secret = false
 
   explicit_auth_flows = [
     "ALLOW_ADMIN_USER_PASSWORD_AUTH",
@@ -117,7 +125,7 @@ resource "aws_apigatewayv2_authorizer" "cognito_auth" {
   }
 }
 
-# --- Routes with Authorizer ---
+# --- Routes ---
 resource "aws_apigatewayv2_route" "create_vpc" {
   api_id        = aws_apigatewayv2_api.vpc_api.id
   route_key     = "POST /create-vpc"
@@ -132,10 +140,11 @@ resource "aws_apigatewayv2_route" "get_vpcs" {
   authorizer_id = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-# --- Lambda Permission ---
+# --- Lambda Permission for API Gateway ---
 resource "aws_lambda_permission" "apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.vpc_api.function_name
   principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.vpc_api.execution_arn}/*/*"
 }
