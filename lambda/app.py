@@ -4,9 +4,7 @@ import boto3
 ec2 = boto3.client("ec2")
 
 def lambda_handler(event, context):
-    print("DEBUG EVENT:", json.dumps(event, indent=2))
-
-    # Detectar versão do payload
+    # Detect API Gateway payload version
     version = event.get("version")
 
     if version == "2.0":
@@ -18,10 +16,8 @@ def lambda_handler(event, context):
         method = event.get("httpMethod", "")
         path = event.get("path", "")
 
-    print(f"DEBUG: method={method}, path={path}")
-
     try:
-        # GET /vpcs → Listar VPCs
+        # GET /vpcs → List VPCs
         if method == "GET" and path.endswith("/vpcs"):
             vpcs = ec2.describe_vpcs()
             vpc_list = []
@@ -38,7 +34,7 @@ def lambda_handler(event, context):
                 "body": json.dumps(vpc_list)
             }
 
-        # POST /create-vpc → Criar VPC + Subnets
+        # POST /create-vpc → Create VPC + Subnets
         elif method == "POST" and path.endswith("/create-vpc"):
             body = {}
             if event.get("body"):
@@ -48,11 +44,11 @@ def lambda_handler(event, context):
             name = body.get("vpc_name", "MyVPC")
             subnets_data = body.get("subnets", [])
 
-            # Criar VPC
+            # Create VPC
             vpc = ec2.create_vpc(CidrBlock=cidr_block)
             vpc_id = vpc["Vpc"]["VpcId"]
 
-            # Criar tag na VPC
+            # Tag VPC
             ec2.create_tags(
                 Resources=[vpc_id],
                 Tags=[{"Key": "Name", "Value": name}]
@@ -71,7 +67,7 @@ def lambda_handler(event, context):
 
                 subnet_id = subnet["Subnet"]["SubnetId"]
 
-                # Tag na Subnet
+                # Tag Subnet
                 ec2.create_tags(
                     Resources=[subnet_id],
                     Tags=[{"Key": "Name", "Value": f"{name}-subnet-{i}"}]
@@ -94,7 +90,6 @@ def lambda_handler(event, context):
             }
 
         else:
-            print(f"Route not found: method={method}, path={path}")
             return {
                 "statusCode": 404,
                 "body": json.dumps({
@@ -105,6 +100,7 @@ def lambda_handler(event, context):
             }
 
     except Exception as e:
+        # Log only real errors
         print("ERROR:", str(e))
         return {
             "statusCode": 500,

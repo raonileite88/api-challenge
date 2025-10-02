@@ -1,7 +1,10 @@
 name: Deploy Lambda + Terraform
 
 on:
-  workflow_dispatch:   # Permite execução manual
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
