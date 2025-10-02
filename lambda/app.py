@@ -27,7 +27,7 @@ def lambda_handler(event, context):
         path = path[len(stage)+1:]  # remove "/prod" prefix
 
     # --- Handle POST /create-vpc ---
-    if method == "POST" and path == "/create-vpc":
+    if method == "POST" and path == "prod/create-vpc":
         try:
             body = json.loads(event.get('body', '{}'))
             vpc_name = body.get('vpc_name')
@@ -77,7 +77,7 @@ def lambda_handler(event, context):
             return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     # --- Handle GET /vpcs ---
-    elif method == "GET" and path == "/vpcs":
+    elif method == "GET" and path == "prod/vpcs":
         try:
             response = table.scan()
             return {
