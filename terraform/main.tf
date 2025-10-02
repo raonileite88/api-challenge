@@ -133,7 +133,7 @@ resource "aws_apigatewayv2_route" "create_vpc" {
   route_key = "POST /create-vpc"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 
-  authorization_type = "NONE"
+  authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
@@ -142,7 +142,7 @@ resource "aws_apigatewayv2_route" "get_vpcs" {
   route_key = "GET /vpcs"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 
-  authorization_type = "NONE"
+  authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 

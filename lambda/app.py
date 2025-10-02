@@ -11,7 +11,7 @@ table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
     # --- DEBUG: log the incoming event ---
-    print("Incoming event:")
+    print("Raw event:")
     print(json.dumps(event, indent=2))
 
     # --- Extract HTTP method and path ---
