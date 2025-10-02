@@ -8,11 +8,9 @@ def lambda_handler(event, context):
     version = event.get("version")
 
     if version == "2.0":
-        # HTTP API (payload v2.0)
         method = event.get("requestContext", {}).get("http", {}).get("method", "")
         path = event.get("rawPath", "")
     else:
-        # REST API (payload v1.0)
         method = event.get("httpMethod", "")
         path = event.get("path", "")
 
@@ -22,8 +20,10 @@ def lambda_handler(event, context):
             vpcs = ec2.describe_vpcs()
             vpc_list = []
             for vpc in vpcs.get("Vpcs", []):
+                name_tag = next((t["Value"] for t in vpc.get("Tags", []) if t["Key"] == "Name"), "")
                 vpc_list.append({
                     "VpcId": vpc.get("VpcId"),
+                    "Name": name_tag,
                     "CidrBlock": vpc.get("CidrBlock"),
                     "State": vpc.get("State"),
                     "IsDefault": vpc.get("IsDefault")
@@ -54,6 +54,7 @@ def lambda_handler(event, context):
                 Tags=[{"Key": "Name", "Value": name}]
             )
 
+            # Prepare subnets
             created_subnets = []
             for i, subnet_def in enumerate(subnets_data, start=1):
                 cidr = subnet_def.get("cidr_block")
@@ -84,6 +85,7 @@ def lambda_handler(event, context):
                 "body": json.dumps({
                     "message": "VPC and Subnets created",
                     "VpcId": vpc_id,
+                    "Name": name,
                     "CidrBlock": cidr_block,
                     "Subnets": created_subnets
                 })
@@ -100,7 +102,6 @@ def lambda_handler(event, context):
             }
 
     except Exception as e:
-        # Log only real errors
         print("ERROR:", str(e))
         return {
             "statusCode": 500,
