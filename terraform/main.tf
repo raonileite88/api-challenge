@@ -2,18 +2,6 @@ provider "aws" {
   region = var.region
 }
 
-# --- DynamoDB Table ---
-resource "aws_dynamodb_table" "vpc_table" {
-  name         = var.dynamodb_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "vpc_id"
-
-  attribute {
-    name = "vpc_id"
-    type = "S"
-  }
-}
-
 # --- IAM Role for Lambda ---
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
@@ -31,14 +19,9 @@ resource "aws_iam_role" "lambda_exec" {
 }
 
 # Attach policies
-resource "aws_iam_role_policy_attachment" "lambda_ec2_dynamo" {
+resource "aws_iam_role_policy_attachment" "lambda_ec2" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_dynamo" {
-  role       = aws_iam_role.lambda_exec.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
@@ -55,15 +38,8 @@ resource "aws_lambda_function" "vpc_api" {
   filename         = "${path.module}/lambda.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda.zip")
 
-  environment {
-    variables = {
-      TABLE_NAME = aws_dynamodb_table.vpc_table.name
-    }
-  }
-
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_ec2_dynamo,
-    aws_iam_role_policy_attachment.lambda_dynamo,
+    aws_iam_role_policy_attachment.lambda_ec2,
     aws_iam_role_policy_attachment.lambda_basic
   ]
 }
@@ -87,7 +63,6 @@ resource "aws_apigatewayv2_stage" "prod" {
   name        = "prod"
   auto_deploy = true
 }
-
 
 # --- Cognito User Pool and Client ---
 resource "aws_cognito_user_pool" "users" {
@@ -135,7 +110,6 @@ resource "aws_apigatewayv2_route" "create_vpc" {
 
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-
 }
 
 resource "aws_apigatewayv2_route" "get_vpcs" {
@@ -145,7 +119,6 @@ resource "aws_apigatewayv2_route" "get_vpcs" {
 
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-  
 }
 
 # --- Lambda Permission for API Gateway ---
