@@ -12,9 +12,15 @@ table = dynamodb.Table(table_name)
 def lambda_handler(event, context):
     # Extract method and path from API Gateway HTTP API v2 event
     method = event.get("requestContext", {}).get("http", {}).get("method")
-    path = event.get("rawPath")
+    raw_path = event.get("rawPath", "")
 
-    print("DEBUG Event:", json.dumps(event))  # log for debugging in CloudWatch
+    # Remove stage prefix if present (e.g., /prod/vpcs -> /vpcs)
+    parts = raw_path.split("/", 2)
+    path = "/" + parts[2] if len(parts) > 2 else raw_path
+
+    print("DEBUG Method:", method)
+    print("DEBUG RawPath:", raw_path)
+    print("DEBUG Normalized Path:", path)
 
     # --- POST /create-vpc ---
     if method == "POST" and path == "/create-vpc":
@@ -78,4 +84,4 @@ def lambda_handler(event, context):
 
     # --- Invalid route ---
     else:
-        return {"statusCode": 404, "body": json.dumps({"error": "Route not found"})}
+        return {"statusCode": 404, "body": json.dumps({"error": "Route not found", "debug_path": path})}
