@@ -10,15 +10,18 @@ table_name = os.environ.get('TABLE_NAME')
 table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
-    # Debug log to CloudWatch
-    print("DEBUG EVENT:", json.dumps(event))
+    # Extract path and method
+    raw_path = event.get('rawPath', '')  # /vpcs or /create-vpc
+    method = event.get('requestContext', {}).get('http', {}).get('method')
 
-    # Extract method and path from HTTP API v2 event
-    http_method = event.get("requestContext", {}).get("http", {}).get("method")
-    raw_path = event.get("rawPath", "")
+    # Remove stage prefix if present (e.g., /prod/vpcs -> /vpcs)
+    stage = event.get('requestContext', {}).get('stage', '')
+    path = raw_path
+    if stage and path.startswith(f'/{stage}'):
+        path = path[len(stage)+1:]  # remove "/prod" prefix
 
     # --- Handle POST /create-vpc ---
-    if http_method == "POST" and raw_path.endswith("/create-vpc"):
+    if method == 'POST' and path == '/create-vpc':
         try:
             body = json.loads(event['body'])
             vpc_name = body.get('vpc_name')
@@ -29,7 +32,7 @@ def lambda_handler(event, context):
             vpc_resp = ec2.create_vpc(CidrBlock=cidr_block)
             vpc_id = vpc_resp['Vpc']['VpcId']
 
-            # Add Name tag
+            # Add Name tag to VPC
             ec2.create_tags(Resources=[vpc_id], Tags=[{'Key': 'Name', 'Value': vpc_name}])
 
             # Create subnets
@@ -64,13 +67,10 @@ def lambda_handler(event, context):
             }
 
         except Exception as e:
-            return {
-                'statusCode': 500,
-                'body': json.dumps({'error': str(e)})
-            }
+            return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     # --- Handle GET /vpcs ---
-    elif http_method == "GET" and raw_path.endswith("/vpcs"):
+    elif method == 'GET' and path == '/vpcs':
         try:
             response = table.scan()
             return {
@@ -78,18 +78,8 @@ def lambda_handler(event, context):
                 'body': json.dumps(response['Items'])
             }
         except Exception as e:
-            return {
-                'statusCode': 500,
-                'body': json.dumps({'error': str(e)})
-            }
+            return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
     # --- Invalid route ---
     else:
-        return {
-            'statusCode': 404,
-            'body': json.dumps({
-                'error': 'Route not found',
-                'debug_path': raw_path,
-                'debug_method': http_method
-            })
-        }
+        return {'statusCode': 404, 'body': json.dumps({'error': 'Route not found', 'debug_path': path})}
