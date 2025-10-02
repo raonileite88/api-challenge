@@ -101,13 +101,6 @@ resource "aws_cognito_user_pool_client" "client" {
   ]
 }
 
-resource "aws_cognito_user" "demo_user" {
-  user_pool_id         = aws_cognito_user_pool.users.id
-  username             = "testuser"
-  temporary_password   = "TempPassword123!"
-  force_alias_creation = true
-}
-
 # ---------------------------
 # Cognito JWT Authorizer
 # ---------------------------
