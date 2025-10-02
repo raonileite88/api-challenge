@@ -1,55 +1,73 @@
 import json
 import boto3
 
-def lambda_handler(event, context):
-    # Debug: logar o evento inteiro
-    print("DEBUG FULL EVENT:")
-    print(json.dumps(event, indent=2))
+ec2 = boto3.client("ec2")
 
-    # Extrair method e path (REST API v1 usa essas chaves)
-    method = event.get("httpMethod", "")
-    path = event.get("path", "")
+def lambda_handler(event, context):
+    print("DEBUG EVENT:", json.dumps(event, indent=2))
+
+    # Extrair método e path do API Gateway v2 (HTTP API)
+    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    path = event.get("rawPath", "")
 
     print(f"DEBUG: method={method}, path={path}")
 
-    # Rotas
-    if method == "GET" and path == "/prod/vpcs":
-        # Aqui você pode buscar as VPCs do boto3 se quiser
-        return {
-            "statusCode": 200,
-            "body": json.dumps([])
-        }
+    try:
+        if method == "GET" and path == "/prod/vpcs":
+            # Listar VPCs
+            vpcs = ec2.describe_vpcs()
+            vpc_list = []
+            for vpc in vpcs.get("Vpcs", []):
+                vpc_list.append({
+                    "VpcId": vpc.get("VpcId"),
+                    "CidrBlock": vpc.get("CidrBlock"),
+                    "State": vpc.get("State"),
+                    "IsDefault": vpc.get("IsDefault")
+                })
 
-    elif method == "POST" and path == "/prod/create-vpc":
-        body = event.get("body")
-        if body:
-            try:
-                data = json.loads(body)
-            except Exception as e:
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({"error": f"Invalid JSON: {str(e)}"})
-                }
+            return {
+                "statusCode": 200,
+                "body": json.dumps(vpc_list)
+            }
+
+        elif method == "POST" and path == "/prod/create-vpc":
+            # Criar VPC
+            body = {}
+            if event.get("body"):
+                body = json.loads(event["body"])
+
+            cidr_block = body.get("CidrBlock", "10.0.0.0/16")  # Default se não enviar nada
+            vpc = ec2.create_vpc(CidrBlock=cidr_block)
+
+            # Adiciona tag Name
+            ec2.create_tags(
+                Resources=[vpc["Vpc"]["VpcId"]],
+                Tags=[{"Key": "Name", "Value": body.get("Name", "MyVPC")}]
+            )
+
+            return {
+                "statusCode": 201,
+                "body": json.dumps({
+                    "message": "VPC created",
+                    "VpcId": vpc["Vpc"]["VpcId"],
+                    "CidrBlock": vpc["Vpc"]["CidrBlock"]
+                })
+            }
+
         else:
-            data = {}
+            print(f"Route not found: method={method}, path={path}")
+            return {
+                "statusCode": 404,
+                "body": json.dumps({
+                    "error": "Route not found",
+                    "debug_path": path,
+                    "debug_method": method
+                })
+            }
 
-        # Exemplo: criar VPC fictícia (só resposta de teste)
+    except Exception as e:
+        print("ERROR:", str(e))
         return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "msg": "VPC created",
-                "input": data
-            })
-        }
-
-    else:
-        # Rota não encontrada
-        print(f"Route not found: method={method}, path={path}")
-        return {
-            "statusCode": 404,
-            "body": json.dumps({
-                "error": "Route not found",
-                "debug_path": path,
-                "debug_method": method
-            })
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
         }
