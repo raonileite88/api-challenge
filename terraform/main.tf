@@ -81,16 +81,6 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
   integration_uri  = aws_lambda_function.vpc_api.invoke_arn
 }
 
-# --- Deployment ---
-resource "aws_apigatewayv2_deployment" "vpc_api_deployment" {
-  api_id = aws_apigatewayv2_api.vpc_api.id
-
-  depends_on = [
-    aws_apigatewayv2_route.create_vpc,
-    aws_apigatewayv2_route.get_vpcs
-  ]
-}
-
 # --- Stage ---
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.vpc_api.id
