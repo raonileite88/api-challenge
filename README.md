@@ -27,70 +27,58 @@ This project provides a serverless HTTP API to **create and list VPCs and subnet
 
 ---
 
-## API Endpoints
+## API Usage
 
-### GET /vpcs
+Use the `IdToken` from Cognito in the `Authorization` header.
 
-**Description:** Returns all VPCs in the account.
+### Get VPCs
 
-**Response Example:**
+```bash
+curl -X GET https://<API_GATEWAY_URL>/vpcs \
+  -H "Authorization: <JWT_ID_TOKEN>"
+```
+
+**Response:**
 
 ```json
 [
   {
-    "VpcId": "vpc-12345678",
-    "Name": "MyVPC",
+    "VpcId": "vpc-123456",
     "CidrBlock": "10.0.0.0/16",
+    "Name": "MyVPC",
     "State": "available",
     "IsDefault": false
   }
 ]
 ```
 
-### POST /create-vpc
+### Create VPC
 
-**Description:** Creates a new VPC and its subnets.
-
-**Request Body Example:**
-
-```json
-{
-  "vpc_name": "MyVPC",
-  "cidr_block": "10.0.0.0/16",
-  "subnets": [
-    {
-      "name": "SubnetA",
-      "cidr_block": "10.0.1.0/24",
-      "az": "us-east-1a"
-    },
-    {
-      "name": "SubnetB",
-      "cidr_block": "10.0.2.0/24",
-      "az": "us-east-1b"
-    }
-  ]
-}
+```bash
+curl -X POST https://<API_GATEWAY_URL>/create-vpc \
+  -H "Authorization: <JWT_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vpc_name": "MyVPC",
+    "cidr_block": "10.0.0.0/16",
+    "subnets": [
+      {"name": "SubnetA", "cidr_block": "10.0.1.0/24", "az": "us-east-1a"},
+      {"name": "SubnetB", "cidr_block": "10.0.2.0/24", "az": "us-east-1b"}
+    ]
+  }'
 ```
 
-**Response Example:**
+**Response:**
 
 ```json
 {
   "message": "VPC and Subnets created",
-  "VpcId": "vpc-12345678",
-  "Name": "MyVPC",
+  "VpcId": "vpc-123456",
   "CidrBlock": "10.0.0.0/16",
+  "Name": "MyVPC",
   "Subnets": [
-    {
-      "SubnetId": "subnet-11111111",
-      "CidrBlock": "10.0.1.0/24",
-      "AvailabilityZone": "us-east-1a"
-    },
-    {
-      "SubnetId": "subnet-22222222",
-      "CidrBlock": "10.0.2.0/24",
-      "AvailabilityZone": "us-east-1b"
-    }
+    {"SubnetId": "subnet-111", "CidrBlock": "10.0.1.0/24", "AvailabilityZone": "us-east-1a"},
+    {"SubnetId": "subnet-222", "CidrBlock": "10.0.2.0/24", "AvailabilityZone": "us-east-1b"}
   ]
 }
 ```
